@@ -62,6 +62,30 @@ def score_from_files(prediction_path, reference_path):
     return score(refs, hypo)
 
 
+def compute_scores(ref, hypo, metric_names):
+    scorers = []
+    if 'Bleu' in metric_names:
+        scorers.append((Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]))
+    if 'METEOR' in metric_names:
+        scorers.append((Meteor(), "METEOR"))
+    if 'ROUGE_L' in metric_names:
+        scorers.append((Rouge(), "ROUGE_L"))
+    if 'CIDEr' in metric_names:
+        scorers.append((Cider(), "CIDEr"))
+    if 'SPICE' in metric_names:
+        scorers.append((Spice(), "SPICE"))
+
+    final_scores = {}
+    for scorer, method in scorers:
+        score, scores = scorer.compute_score(ref, hypo)
+        if type(score) == list:
+            for m, s in zip(method, score):
+                final_scores[m] = s
+        else:
+            final_scores[method] = score
+    return final_scores
+
+
 if __name__ == 'main':
     parser = argparse.ArgumentParser(description='Evaluate the predicted descriptions')
     parser.add_argument('-prediction_path', type=str, help='path to file with the predicted descriptions to evaluate',
