@@ -103,10 +103,11 @@ class ANETcaptions(object):
         return False
 
     def get_gt_vid_ids(self):
-        vid_ids = set([])
-        for gt in self.ground_truths:
-            vid_ids |= set(gt.keys())
-        return list(vid_ids)
+        # vid_ids = set([])
+        # for gt in self.ground_truths:
+        #     vid_ids |= set(gt.keys())
+        # return list(vid_ids)
+        return list(self.ground_truths.keys())
 
     def evaluate(self):
         aggregator = {}
@@ -134,26 +135,28 @@ class ANETcaptions(object):
         for vid_i, vid_id in enumerate(gt_vid_ids):
             best_recall = 0
             best_precision = 0
-            for gt in self.ground_truths:
-                if vid_id not in gt:
-                    continue
-                refs = gt[vid_id]
-                ref_set_covered = set([])
-                pred_set_covered = set([])
-                num_gt = 0
-                num_pred = 0
-                if vid_id in self.prediction:
-                    for pred_i, pred in enumerate(self.prediction[vid_id]):
-                        pred_timestamp = pred['timestamp']
-                        for ref_i, ref_timestamp in enumerate(refs['timestamps']):
-                            if self.iou(pred_timestamp, ref_timestamp) > tiou:
-                                ref_set_covered.add(ref_i)
-                                pred_set_covered.add(pred_i)
+            # for gt in self.ground_truths:
+                # if vid_id not in gt:
+                    # continue
+                # refs = gt[vid_id]
+            refs = self.ground_truths[vid_id]
+            ref_set_covered = set([])
+            pred_set_covered = set([])
+            num_gt = 0
+            num_pred = 0
+            if vid_id in self.prediction:
+                for pred_i, pred in enumerate(self.prediction[vid_id]):
+                    pred_timestamp = pred['timestamp']
+                    for ref_i, ref_timestamp in enumerate(refs['timestamps']):
+                        if self.iou(pred_timestamp, ref_timestamp) > tiou:
+                            ref_set_covered.add(ref_i)
+                            pred_set_covered.add(pred_i)
 
-                    new_precision = float(len(pred_set_covered)) / (pred_i + 1) 
-                    best_precision = max(best_precision, new_precision)
-                new_recall = float(len(ref_set_covered)) / len(refs['timestamps'])
-                best_recall = max(best_recall, new_recall)
+                new_precision = float(len(pred_set_covered)) / (pred_i + 1) 
+                best_precision = max(best_precision, new_precision)
+            new_recall = float(len(ref_set_covered)) / len(refs['timestamps'])
+            best_recall = max(best_recall, new_recall)
+            
             recall[vid_i] = best_recall
             precision[vid_i] = best_precision
         return sum(precision) / len(precision), sum(recall) / len(recall)
@@ -163,7 +166,6 @@ class ANETcaptions(object):
         res = {}
         gts = {}
         gt_vid_ids = self.get_gt_vid_ids()
-        
         unique_index = 0
 
         # video id to unique caption ids mapping
@@ -174,7 +176,6 @@ class ANETcaptions(object):
         
         
         for vid_id in gt_vid_ids:
-            
             vid2capid[vid_id] = []
 
             # If the video does not have a prediction, then Vwe give it no matches
@@ -188,24 +189,25 @@ class ANETcaptions(object):
                 # For each prediction, we look at the tIoU with ground truth
                 for pred in self.prediction[vid_id]:
                     has_added = False
-                    for gt in self.ground_truths:
-                        if vid_id not in gt:
-                            continue
-                        gt_captions = gt[vid_id]
-                        for caption_idx, caption_timestamp in enumerate(gt_captions['timestamps']):
-                            if self.iou(pred['timestamp'], caption_timestamp) >= tiou:
+                    # for gt in self.ground_truths:
+                    #    if vid_id not in gt:
+                    #        continue
+                    #    gt_captions = gt[vid_id]
+                    gt_captions = self.ground_truths[vid_id]
+                    for caption_idx, caption_timestamp in enumerate(gt_captions['timestamps']):
+                        if self.iou(pred['timestamp'], caption_timestamp) >= tiou:
 
-                                cur_res[unique_index] = [{'caption': remove_nonascii(pred['sentence'])}]
-                                cur_gts[unique_index] = [{'caption': remove_nonascii(gt_captions['sentences'][caption_idx])}]
-                                vid2capid[vid_id].append(unique_index)
-                                unique_index += 1
-                                has_added = True
-
-                        # If the predicted caption does not overlap with any ground truth,
-                        # we should compare it with garbage
-                        if not has_added:
                             cur_res[unique_index] = [{'caption': remove_nonascii(pred['sentence'])}]
-                            cur_gts[unique_index] = [{'caption': 'abc123!@#'}]
+                            cur_gts[unique_index] = [{'caption': remove_nonascii(gt_captions['sentences'][caption_idx])}]
+                            vid2capid[vid_id].append(unique_index)
+                            unique_index += 1
+                            has_added = True
+
+                    # If the predicted caption does not overlap with any ground truth,
+                    # we should compare it with garbage
+                    if not has_added:
+                        cur_res[unique_index] = [{'caption': remove_nonascii(pred['sentence'])}]
+                        cur_gts[unique_index] = [{'caption': 'abc123!@#'}]
                 if unique_index in cur_res:
                     vid2capid[vid_id].append(unique_index)
                     unique_index += 1
@@ -222,11 +224,18 @@ class ANETcaptions(object):
             # call tokenizer here for all predictions and gts
             tokenize_res = self.tokenizer.tokenize(cur_res)
             tokenize_gts = self.tokenizer.tokenize(cur_gts)
-            
+
+            # print(tokenize_res)
+            # print(tokenize_gts)
+            # print(vid2capid)
+
             # reshape back
-            for vid in vid2capid.keys():
-                res[vid] = {index:tokenize_res[index] for index in vid2capid[vid]}
-                gts[vid] = {index:tokenize_gts[index] for index in vid2capid[vid]}
+            for vid, capids in vid2capid.items():
+                res[vid] = {index:tokenize_res[index] for index in capids}
+                gts[vid] = {index:tokenize_gts[index] for index in capids}
+
+            # print(res)
+            # print(gts)
             
             for vid_id in gt_vid_ids:
 
@@ -239,15 +248,15 @@ class ANETcaptions(object):
                     score, scores = scorer.compute_score(gts[vid_id], res[vid_id])
                 all_scores[vid_id] = score
 
-            print(all_scores.values())
+            # print(all_scores.values())
             if type(method) == list:
-                scores = np.mean(all_scores.values(), axis=0)
-                for m in xrange(len(method)):
+                scores = np.mean(list(all_scores.values()), axis=0)
+                for m in range(len(method)):
                     output[method[m]] = scores[m]
                     if self.verbose:
                         print("Calculated tIoU: %1.1f, %s: %0.3f" % (tiou, method[m], output[method[m]]))
             else:
-                output[method] = np.mean(all_scores.values())
+                output[method] = np.mean(list(all_scores.values()))
                 if self.verbose:
                     print("Calculated tIoU: %1.1f, %s: %0.3f" % (tiou, method, output[method]))
         return output
@@ -283,9 +292,10 @@ def densecap_score_from_files(args):
 
 def densecap_score(args, ref, hypo):
     evaluator = ANETcaptions(ground_truth=ref, prediction=hypo,
-                             tious=args.tiou, max_proposals=args.max_proposals_per_video,
-                             verbose=args.verbose)
+                             tious=args['tiou'], max_proposals=args['max_proposals_per_video'],
+                             verbose=args['verbose'])
     evaluator.evaluate()
+    return {k: np.mean(tiuo_scores) for k, tiuo_scores in evaluator.scores.items()} 
 
 
 if __name__=='__main__':

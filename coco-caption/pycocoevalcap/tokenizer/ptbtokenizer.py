@@ -34,7 +34,7 @@ class PTBTokenizer:
         # ======================================================
         final_tokenized_captions_for_image = {}
         image_id = [k for k, v in captions_for_image.items() for _ in range(len(v))]
-        sentences = '\n'.join([c['caption'].replace('\n', ' ') for k, v in captions_for_image.items() for c in v])
+        sentences = u'\n'.join([c['caption'].replace('\n', ' ') for k, v in captions_for_image.items() for c in v]).encode('utf-8')
 
         # ======================================================
         # save sentences to temporary file
@@ -51,7 +51,7 @@ class PTBTokenizer:
         p_tokenizer = subprocess.Popen(cmd, cwd=path_to_jar_dirname, \
                 stdout=subprocess.PIPE)
         token_lines = p_tokenizer.communicate(input=sentences.rstrip())[0]
-        lines = token_lines.split('\n')
+        lines = token_lines.split('\n'.encode('utf-8'))
         # remove temp file
         os.remove(tmp_file.name)
 
@@ -61,8 +61,7 @@ class PTBTokenizer:
         for k, line in zip(image_id, lines):
             if not k in final_tokenized_captions_for_image:
                 final_tokenized_captions_for_image[k] = []
-            tokenized_caption = ' '.join([w for w in line.rstrip().split(' ') \
-                    if w not in PUNCTUATIONS])
+            tokenized_caption = ' '.join([w for w in line.decode('utf-8', 'ignore').rstrip().split(' ') if w not in PUNCTUATIONS])
             final_tokenized_captions_for_image[k].append(tokenized_caption)
 
         return final_tokenized_captions_for_image
