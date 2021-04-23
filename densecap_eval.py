@@ -33,8 +33,8 @@ class ANETcaptions(object):
             raise IOError('Please input a valid tIoU.')
         if not ground_truth:
             raise IOError('Please input a valid ground truth file.')
-        if not prediction:
-            raise IOError('Please input a valid prediction file.')
+        # if not prediction:
+        #     raise IOError('Please input a valid prediction file.')
 
         self.verbose = verbose
         self.tious = tious
@@ -110,21 +110,29 @@ class ANETcaptions(object):
         return list(self.ground_truths.keys())
 
     def evaluate(self):
-        aggregator = {}
         self.scores = {}
-        for tiou in self.tious:
-            scores = self.evaluate_tiou(tiou)
-            for metric, score in scores.items():
-                if metric not in self.scores:
-                    self.scores[metric] = []
-                self.scores[metric].append(score)
-        if self.verbose:
-            self.scores['Recall'] = []
-            self.scores['Precision'] = []
+        if self.prediction:
+            aggregator = {}
             for tiou in self.tious:
-                precision, recall = self.evaluate_detection(tiou)
-                self.scores['Recall'].append(recall)
-                self.scores['Precision'].append(precision)
+                scores = self.evaluate_tiou(tiou)
+                for metric, score in scores.items():
+                    if metric not in self.scores:
+                        self.scores[metric] = []
+                    self.scores[metric].append(score)
+            if self.verbose:
+                self.scores['Recall'] = []
+                self.scores['Precision'] = []
+                for tiou in self.tious:
+                    precision, recall = self.evaluate_detection(tiou)
+                    self.scores['Recall'].append(recall)
+                    self.scores['Precision'].append(precision)
+        else:
+            for scorer in self.scorers:
+                if type(scorer[1]) is list:
+                    for metric in scorer[1]:
+                        self.scores[metric] = [0.0 for tiou in self.tious]
+                else:
+                    self.scores[scorer[1]] = [0.0 for tiou in self.tious]
 
     def evaluate_detection(self, tiou):
         gt_vid_ids = self.get_gt_vid_ids()
